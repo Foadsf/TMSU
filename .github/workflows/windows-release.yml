@@ -1,0 +1,73 @@
+name: Windows Build & Release
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows Executable
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Setup MSYS2 (UCRT64 GCC for cgo)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
+
+      - name: Add UCRT64 GCC to PATH
+        shell: pwsh
+        run: |
+          # Make MinGW-w64 GCC discoverable by Go's cgo linker
+          echo "D:\a\_temp\msys64\ucrt64\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Build tmsu.exe
+        shell: pwsh
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          gcc --version
+          go build -tags novfs -o build/tmsu.exe
+
+      - name: Package portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/tmsu.exe, README.md, COPYING.md `
+            -DestinationPath build/tmsu-windows-portable.zip
+
+      - name: Compile Inno Setup installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /Obuild `
+            .github/scripts/installer.iss
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmsu-windows
+          path: |
+            build/tmsu-windows-portable.zip
+            build/tmsu-windows-installer.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/tmsu-windows-portable.zip
+            build/tmsu-windows-installer.exe
+          generate_release_notes: true

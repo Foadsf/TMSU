@@ -112,15 +112,28 @@ func newNode(name string, isReal bool, isDir bool) *node {
 }
 
 func (node *node) paths(paths []string, prefix string) []string {
+	path := joinNodePath(prefix, node.name)
+
 	if node.isReal {
-		paths = append(paths, filepath.Join(prefix, node.name))
+		paths = append(paths, path)
 	}
 
 	for _, childNode := range node.nodes {
-		paths = childNode.paths(paths, filepath.Join(prefix, node.name))
+		paths = childNode.paths(paths, path)
 	}
 
 	return paths
+}
+
+// joinNodePath is filepath.Join, except that a Windows volume name ("C:") hanging
+// off the synthetic "/" root becomes the volume root ("C:\") instead of "\C:",
+// which would otherwise make every path "\C:Users\..." and fail to stat.
+func joinNodePath(prefix, name string) string {
+	if name != "" && filepath.VolumeName(name) == name {
+		return name + string(filepath.Separator)
+	}
+
+	return filepath.Join(prefix, name)
 }
 
 func (node *node) findTopLevel(resultNode *node) {

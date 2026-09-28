@@ -199,7 +199,9 @@ func (store *Storage) absPaths(files entities.Files) {
 }
 
 func (store *Storage) absPath(file *entities.File) {
-	if file == nil || file.Directory == "" || file.Directory[0] == filepath.Separator {
+	// filepath.IsAbs rather than a leading-separator test: files outside the root are
+	// stored with absolute directories, which on Windows start with a volume ("C:\...").
+	if file == nil || file.Directory == "" || filepath.IsAbs(file.Directory) {
 		return
 	}
 
